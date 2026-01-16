@@ -4,10 +4,11 @@ A NestJS-based REST API that counts audio frames in MP3 files via streaming uplo
 
 ## Features
 
-- **Stream processing**: Handles MP3 files as streams for memory efficiency
+- **Performant**: Handles MP3 files as streams for memory efficiency
 - **Accurate frame counting**: Parses MP3 headers to count frames using MPEG audio layer 3 specification
 - **ID3 tag handling**: Automatically skips ID3v2 metadata tags
 - **Variable bitrate support**: Correctly calculates frame sizes for different bitrates and sample rates
+- **Scaling**: Stress-tested to handle multiple concurrent requests
 
 ## Requirements
 
