@@ -67,7 +67,42 @@ export class FileUploadService {
 
           // Make sure we have the complete frame in buffer
           if (offset + frameSize <= buffer.length) {
-            frameCount++;
+            // Check for XING/INFO/VBRI metadata frames (VBR headers)
+            let isMetadataFrame = false;
+
+            // XING/INFO header check (offset + 36 for MPEG1 Layer3)
+            if (offset + 40 <= buffer.length) {
+              const xingOffset = offset + 36;
+              if (
+                (buffer[xingOffset] === 0x58 &&
+                  buffer[xingOffset + 1] === 0x69 &&
+                  buffer[xingOffset + 2] === 0x6e &&
+                  buffer[xingOffset + 3] === 0x67) || // 'Xing'
+                (buffer[xingOffset] === 0x49 &&
+                  buffer[xingOffset + 1] === 0x6e &&
+                  buffer[xingOffset + 2] === 0x66 &&
+                  buffer[xingOffset + 3] === 0x6f) // 'Info'
+              ) {
+                isMetadataFrame = true;
+              }
+            }
+
+            // VBRI header check (offset + 36)
+            if (!isMetadataFrame && offset + 40 <= buffer.length) {
+              const vbriOffset = offset + 36;
+              if (
+                buffer[vbriOffset] === 0x56 &&
+                buffer[vbriOffset + 1] === 0x42 &&
+                buffer[vbriOffset + 2] === 0x52 &&
+                buffer[vbriOffset + 3] === 0x49 // 'VBRI'
+              ) {
+                isMetadataFrame = true;
+              }
+            }
+
+            if (!isMetadataFrame) {
+              frameCount++;
+            }
             offset += frameSize;
           } else {
             // Not enough data for complete frame, keep in buffer

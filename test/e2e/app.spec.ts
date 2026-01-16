@@ -34,11 +34,13 @@ describe('AppController (e2e)', () => {
         .send(stream)
         .expect(200)
         .expect({
-          // Manual MP3 frame parsing counts 6090 frames
+          // Manual MP3 frame parsing counts 6089 frames
           // ffprobe with -count_packets reports 6089 (may exclude metadata frame)
-          // Run this command to verify with ffprobe:
+          // Run this command to verify with ffprobe or mediainfo:
           // ./scripts/ffmpeg-frames.sh ./test/e2e/fixtures/sample.mp3
-          frameCount: 6090,
+          // or
+          // ./scripts/mediainfo-frames.sh ./test/e2e/fixtures/sample.mp3
+          frameCount: 6089,
         });
     });
 
@@ -58,7 +60,7 @@ describe('AppController (e2e)', () => {
           .send(stream)
           .then((res) => {
             expect(res.status).toBe(200);
-            expect(res.body).toEqual({ frameCount: 6090 });
+            expect(res.body).toEqual({ frameCount: 6089 });
             return res;
           }),
       );
