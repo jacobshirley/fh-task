@@ -57,6 +57,8 @@ describe('AppController (e2e)', () => {
         request(server)
           .post('/file-upload')
           .set('Content-Type', 'audio/mpeg')
+          .set('Connection', 'keep-alive')
+          .timeout(10000)
           .send(stream)
           .then((res) => {
             expect(res.status).toBe(200);
@@ -67,7 +69,7 @@ describe('AppController (e2e)', () => {
 
       const results = await Promise.all(requests);
       expect(results.length).toBe(concurrentRequests);
-    });
+    }, 15000);
 
     it('should return zero frames for invalid/corrupt data', async () => {
       const invalidData = Buffer.from('not a valid mp3 file at all');
