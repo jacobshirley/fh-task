@@ -1,9 +1,8 @@
-import { Controller, Post } from '@nestjs/common';
+import { Controller, HttpCode, Post, Req } from '@nestjs/common';
 import { FileUploadService } from './file-upload.service.js';
+import type { Request } from 'express';
 
-@Controller({
-  path: 'file-upload',
-})
+@Controller('file-upload')
 export class FileUploadController {
   private readonly fileUploadService: FileUploadService;
 
@@ -12,7 +11,8 @@ export class FileUploadController {
   }
 
   @Post()
-  async postCountMp3Frames(stream: AsyncIterable<Uint8Array>): Promise<number> {
-    return await this.fileUploadService.countMp3Frames(stream);
+  @HttpCode(200)
+  postCountMp3Frames(@Req() req: Request) {
+    return this.fileUploadService.countMp3Frames(req);
   }
 }
