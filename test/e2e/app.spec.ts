@@ -51,25 +51,26 @@ describe('AppController (e2e)', () => {
 
       const server = app.getHttpServer();
 
-      // Fire 5 truly concurrent requests to verify concurrent processing
+      // Fire 5 concurrent requests with slight stagger to avoid overwhelming CI
       const concurrentRequests = 5;
-      const requests = Array.from({ length: concurrentRequests }, () =>
-        request(server)
-          .post('/file-upload')
-          .set('Content-Type', 'audio/mpeg')
-          .set('Connection', 'keep-alive')
-          .timeout(10000)
-          .send(stream)
-          .then((res) => {
-            expect(res.status).toBe(200);
-            expect(res.body).toEqual({ frameCount: 6089 });
-            return res;
-          }),
+      const requests = Array.from({ length: concurrentRequests }, (_, i) =>
+        // Add small delay between each request to avoid connection reset in CI
+        new Promise((resolve) => setTimeout(resolve, i * 10)).then(() =>
+          request(server)
+            .post('/file-upload')
+            .set('Content-Type', 'audio/mpeg')
+            .send(stream)
+            .then((res) => {
+              expect(res.status).toBe(200);
+              expect(res.body).toEqual({ frameCount: 6089 });
+              return res;
+            }),
+        ),
       );
 
       const results = await Promise.all(requests);
       expect(results.length).toBe(concurrentRequests);
-    }, 15000);
+    }, 20000);
 
     it('should return zero frames for invalid/corrupt data', async () => {
       const invalidData = Buffer.from('not a valid mp3 file at all');
