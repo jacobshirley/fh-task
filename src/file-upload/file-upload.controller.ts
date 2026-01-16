@@ -12,7 +12,7 @@ export class FileUploadController {
 
   @Post()
   @HttpCode(200)
-  postCountMp3Frames(@Req() req: Request) {
+  async postCountMp3Frames(@Req() req: Request) {
     return this.fileUploadService.countMp3Frames(req);
   }
 }

@@ -29,9 +29,10 @@ describe('AppController (e2e)', () => {
       .send(stream)
       .expect(200)
       .expect({
-        // According to ffprobe, this file has 6089 frames
-        // Run this command to verify:
-        // ./scripts/ffprobe-frame-count.sh ./test/e2e/fixtures/sample.mp3
+        // Manual MP3 frame parsing counts 6090 frames
+        // ffprobe with -count_packets reports 6089 (may exclude metadata frame)
+        // Run this command to verify with ffprobe:
+        // ./scripts/ffmpeg-frames.sh ./test/e2e/fixtures/sample.mp3
         frameCount: 6090,
       });
   });

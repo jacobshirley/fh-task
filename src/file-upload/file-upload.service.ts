@@ -67,22 +67,8 @@ export class FileUploadService {
 
           // Make sure we have the complete frame in buffer
           if (offset + frameSize <= buffer.length) {
-            // Verify next frame sync if there's more data
-            if (offset + frameSize + 2 <= buffer.length) {
-              const nextFrameSync =
-                buffer[offset + frameSize] === 0xff &&
-                (buffer[offset + frameSize + 1] & 0xe0) === 0xe0;
-              if (nextFrameSync) {
-                frameCount++;
-                offset += frameSize;
-              } else {
-                offset++;
-              }
-            } else {
-              // Last frame or not enough data to verify - count it
-              frameCount++;
-              offset += frameSize;
-            }
+            frameCount++;
+            offset += frameSize;
           } else {
             // Not enough data for complete frame, keep in buffer
             break;
