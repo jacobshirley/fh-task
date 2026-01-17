@@ -2,7 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication } from '@nestjs/common';
 import request from 'supertest';
 import { App } from 'supertest/types.js';
-import { AppModule } from '../../src/app.module.js';
+import { AppModule } from '../../src/api/app.module.js';
 import { describe, beforeEach, afterEach, it, expect } from 'vitest';
 import fs from 'fs';
 import path from 'path';
