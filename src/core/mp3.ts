@@ -31,6 +31,12 @@ const ByteMap = {
   // I already defined above
 } as const;
 
+/**
+ * Counts the number of MP3 frames in the given stream.
+ *
+ * @param stream Input stream of bytes of the MP3 data
+ * @returns The number of frames
+ */
 export async function countMp3Frames(
   stream: AsyncIterable<Uint8Array>,
 ): Promise<number> {
