@@ -107,26 +107,35 @@ export async function countMp3Frames(
           // Check for XING/INFO/VBRI metadata frames (VBR headers)
           let isMetadataFrame = false;
 
-          // XING/INFO header check (offset + 36 for MPEG1 Layer3)
+          // XING header check (offset + 36 for MPEG1 Layer3)
           if (offset + 40 <= buffer.length) {
             const xingOffset = offset + 36;
             if (
-              (buffer[xingOffset] === ByteMap.X &&
-                buffer[xingOffset + 1] === ByteMap.i &&
-                buffer[xingOffset + 2] === ByteMap.n &&
-                buffer[xingOffset + 3] === ByteMap.g) || // 'Xing'
-              (buffer[xingOffset] === ByteMap.I &&
-                buffer[xingOffset + 1] === ByteMap.n &&
-                buffer[xingOffset + 2] === ByteMap.f &&
-                buffer[xingOffset + 3] === ByteMap.o) // 'Info'
+              buffer[xingOffset] === ByteMap.X &&
+              buffer[xingOffset + 1] === ByteMap.i &&
+              buffer[xingOffset + 2] === ByteMap.n &&
+              buffer[xingOffset + 3] === ByteMap.g
             ) {
               isMetadataFrame = true;
             }
           }
 
-          // VBRI header check (offset + 36)
+          // INFO header check (offset + 36)
           if (!isMetadataFrame && offset + 40 <= buffer.length) {
-            const vbriOffset = offset + 36;
+            const infoOffset = offset + 36;
+            if (
+              buffer[infoOffset] === ByteMap.I &&
+              buffer[infoOffset + 1] === ByteMap.n &&
+              buffer[infoOffset + 2] === ByteMap.f &&
+              buffer[infoOffset + 3] === ByteMap.o // 'Info'
+            ) {
+              isMetadataFrame = true;
+            }
+          }
+
+          // VBRI header check (offset + 32)
+          if (!isMetadataFrame && offset + 36 <= buffer.length) {
+            const vbriOffset = offset + 32;
             if (
               buffer[vbriOffset] === ByteMap.V &&
               buffer[vbriOffset + 1] === ByteMap.B &&
