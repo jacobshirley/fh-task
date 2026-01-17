@@ -1,3 +1,36 @@
+const ByteMap = {
+  // ID3 signature bytes
+  I: 0x49,
+  D: 0x44,
+  THREE: 0x33,
+
+  // Frame sync bytes
+  SYNC_BYTE_1: 0xff,
+  SYNC_BYTE_2_MASK: 0xe0,
+
+  // Bit masks
+  MASK_7F: 0x7f,
+  MASK_0F: 0x0f,
+  MASK_03: 0x03,
+  MASK_01: 0x01,
+
+  // XING header bytes
+  X: 0x58,
+  i: 0x69,
+  n: 0x6e,
+  g: 0x67,
+
+  // INFO header bytes (reuses I, n)
+  f: 0x66,
+  o: 0x6f,
+
+  // VBRI header bytes
+  V: 0x56,
+  B: 0x42,
+  R: 0x52,
+  // I already defined above
+} as const;
+
 export async function countMp3Frames(
   stream: AsyncIterable<Uint8Array>,
 ): Promise<number> {
@@ -23,13 +56,17 @@ export async function countMp3Frames(
 
     // Skip ID3 tag at the beginning of the file
     if (!skippedId3 && buffer.length >= 10) {
-      if (buffer[0] === 0x49 && buffer[1] === 0x44 && buffer[2] === 0x33) {
+      if (
+        buffer[0] === ByteMap.I &&
+        buffer[1] === ByteMap.D &&
+        buffer[2] === ByteMap.THREE
+      ) {
         // 'ID3'
         const id3Size =
-          ((buffer[6] & 0x7f) << 21) |
-          ((buffer[7] & 0x7f) << 14) |
-          ((buffer[8] & 0x7f) << 7) |
-          (buffer[9] & 0x7f);
+          ((buffer[6] & ByteMap.MASK_7F) << 21) |
+          ((buffer[7] & ByteMap.MASK_7F) << 14) |
+          ((buffer[8] & ByteMap.MASK_7F) << 7) |
+          (buffer[9] & ByteMap.MASK_7F);
         const totalId3Size = 10 + id3Size;
         if (buffer.length >= totalId3Size) {
           offset = totalId3Size;
@@ -42,11 +79,15 @@ export async function countMp3Frames(
 
     while (offset + 4 <= buffer.length) {
       // Check for MP3 frame sync (11 bits set to 1)
-      if (buffer[offset] === 0xff && (buffer[offset + 1] & 0xe0) === 0xe0) {
+      if (
+        buffer[offset] === ByteMap.SYNC_BYTE_1 &&
+        (buffer[offset + 1] & ByteMap.SYNC_BYTE_2_MASK) ===
+          ByteMap.SYNC_BYTE_2_MASK
+      ) {
         // Extract header information
-        const bitrateIndex = (buffer[offset + 2] >> 4) & 0x0f;
-        const sampleRateIndex = (buffer[offset + 2] >> 2) & 0x03;
-        const padding = (buffer[offset + 2] >> 1) & 0x01;
+        const bitrateIndex = (buffer[offset + 2] >> 4) & ByteMap.MASK_0F;
+        const sampleRateIndex = (buffer[offset + 2] >> 2) & ByteMap.MASK_03;
+        const padding = (buffer[offset + 2] >> 1) & ByteMap.MASK_01;
 
         const bitrate = bitrateTable[bitrateIndex];
         const sampleRate = sampleRateTable[sampleRateIndex];
@@ -70,14 +111,14 @@ export async function countMp3Frames(
           if (offset + 40 <= buffer.length) {
             const xingOffset = offset + 36;
             if (
-              (buffer[xingOffset] === 0x58 &&
-                buffer[xingOffset + 1] === 0x69 &&
-                buffer[xingOffset + 2] === 0x6e &&
-                buffer[xingOffset + 3] === 0x67) || // 'Xing'
-              (buffer[xingOffset] === 0x49 &&
-                buffer[xingOffset + 1] === 0x6e &&
-                buffer[xingOffset + 2] === 0x66 &&
-                buffer[xingOffset + 3] === 0x6f) // 'Info'
+              (buffer[xingOffset] === ByteMap.X &&
+                buffer[xingOffset + 1] === ByteMap.i &&
+                buffer[xingOffset + 2] === ByteMap.n &&
+                buffer[xingOffset + 3] === ByteMap.g) || // 'Xing'
+              (buffer[xingOffset] === ByteMap.I &&
+                buffer[xingOffset + 1] === ByteMap.n &&
+                buffer[xingOffset + 2] === ByteMap.f &&
+                buffer[xingOffset + 3] === ByteMap.o) // 'Info'
             ) {
               isMetadataFrame = true;
             }
@@ -87,10 +128,10 @@ export async function countMp3Frames(
           if (!isMetadataFrame && offset + 40 <= buffer.length) {
             const vbriOffset = offset + 36;
             if (
-              buffer[vbriOffset] === 0x56 &&
-              buffer[vbriOffset + 1] === 0x42 &&
-              buffer[vbriOffset + 2] === 0x52 &&
-              buffer[vbriOffset + 3] === 0x49 // 'VBRI'
+              buffer[vbriOffset] === ByteMap.V &&
+              buffer[vbriOffset + 1] === ByteMap.B &&
+              buffer[vbriOffset + 2] === ByteMap.R &&
+              buffer[vbriOffset + 3] === ByteMap.I // 'VBRI'
             ) {
               isMetadataFrame = true;
             }
