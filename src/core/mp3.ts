@@ -51,6 +51,51 @@ export async function countMp3Frames(
   // Sample rate table for MPEG 1 in Hz
   const sampleRateTable = [44100, 48000, 32000, 0];
 
+  const isFrameSync = (off: number) =>
+    buffer[off] === ByteMap.SYNC_BYTE_1 &&
+    (buffer[off + 1] & ByteMap.SYNC_BYTE_2_MASK) === ByteMap.SYNC_BYTE_2_MASK;
+
+  const getBitrateIndex = (offset: number) =>
+    (buffer[offset + 2] >> 4) & ByteMap.MASK_0F;
+  const getSampleRateIndex = (offset: number) =>
+    (buffer[offset + 2] >> 2) & ByteMap.MASK_03;
+  const getPadding = (offset: number) =>
+    (buffer[offset + 2] >> 1) & ByteMap.MASK_01;
+
+  const getBitrate = (bitrateIndex: number): number | undefined =>
+    bitrateTable[bitrateIndex];
+  const getSampleRate = (sampleRateIndex: number): number | undefined =>
+    sampleRateTable[sampleRateIndex];
+
+  const isXingHeader = (offset: number) =>
+    buffer[offset] === ByteMap.X &&
+    buffer[offset + 1] === ByteMap.i &&
+    buffer[offset + 2] === ByteMap.n &&
+    buffer[offset + 3] === ByteMap.g;
+
+  const isInfoHeader = (offset: number) =>
+    buffer[offset] === ByteMap.I &&
+    buffer[offset + 1] === ByteMap.n &&
+    buffer[offset + 2] === ByteMap.f &&
+    buffer[offset + 3] === ByteMap.o; // 'Info'
+
+  const isVbriHeader = (offset: number) =>
+    buffer[offset] === ByteMap.V &&
+    buffer[offset + 1] === ByteMap.B &&
+    buffer[offset + 2] === ByteMap.R &&
+    buffer[offset + 3] === ByteMap.I; // 'VBRI'
+
+  const isId3Header = (offset: number) =>
+    buffer[offset] === ByteMap.I &&
+    buffer[offset + 1] === ByteMap.D &&
+    buffer[offset + 2] === ByteMap.THREE; // 'ID3'
+
+  const calculateId3Size = (offset: number) =>
+    ((buffer[offset + 6] & ByteMap.MASK_7F) << 21) |
+    ((buffer[offset + 7] & ByteMap.MASK_7F) << 14) |
+    ((buffer[offset + 8] & ByteMap.MASK_7F) << 7) |
+    (buffer[offset + 9] & ByteMap.MASK_7F);
+
   for await (const chunk of stream) {
     // Concatenate the existing buffer with the new chunk
     const newBuffer = new Uint8Array(buffer.length + chunk.length);
@@ -62,18 +107,12 @@ export async function countMp3Frames(
 
     // Skip ID3 tag at the beginning of the file
     if (!skippedId3 && buffer.length >= 10) {
-      if (
-        buffer[0] === ByteMap.I &&
-        buffer[1] === ByteMap.D &&
-        buffer[2] === ByteMap.THREE
-      ) {
+      if (isId3Header(0)) {
         // 'ID3'
-        const id3Size =
-          ((buffer[6] & ByteMap.MASK_7F) << 21) |
-          ((buffer[7] & ByteMap.MASK_7F) << 14) |
-          ((buffer[8] & ByteMap.MASK_7F) << 7) |
-          (buffer[9] & ByteMap.MASK_7F);
+        // Calculate ID3 tag size which is stored as a synchsafe integer
+        const id3Size = calculateId3Size(0);
         const totalId3Size = 10 + id3Size;
+
         if (buffer.length >= totalId3Size) {
           offset = totalId3Size;
           skippedId3 = true;
@@ -83,85 +122,78 @@ export async function countMp3Frames(
       }
     }
 
+    /**
+     * A frame is identified by the sync word (11 bits set to 1).
+     * The frame header is 4 bytes long and contains information about bitrate,
+     * sample rate, padding, etc. We use this information to calculate the frame size
+     * and skip to the next frame.
+     */
     while (offset + 4 <= buffer.length) {
       // Check for MP3 frame sync (11 bits set to 1)
-      if (
-        buffer[offset] === ByteMap.SYNC_BYTE_1 &&
-        (buffer[offset + 1] & ByteMap.SYNC_BYTE_2_MASK) ===
-          ByteMap.SYNC_BYTE_2_MASK
-      ) {
-        // Extract header information
-        const bitrateIndex = (buffer[offset + 2] >> 4) & ByteMap.MASK_0F;
-        const sampleRateIndex = (buffer[offset + 2] >> 2) & ByteMap.MASK_03;
-        const padding = (buffer[offset + 2] >> 1) & ByteMap.MASK_01;
-
-        const bitrate = bitrateTable[bitrateIndex];
-        const sampleRate = sampleRateTable[sampleRateIndex];
-
-        // Skip invalid frames
-        if (bitrate === 0 || sampleRate === 0) {
-          offset++;
-          continue;
-        }
-
-        // Calculate frame size: (144 * bitrate) / sampleRate + padding
-        const frameSize =
-          Math.floor((144 * bitrate * 1000) / sampleRate) + padding;
-
-        // Make sure we have the complete frame in buffer
-        if (offset + frameSize <= buffer.length) {
-          // Check for XING/INFO/VBRI metadata frames (VBR headers)
-          let isMetadataFrame = false;
-
-          // XING header check (offset + 36 for MPEG1 Layer3)
-          if (offset + 40 <= buffer.length) {
-            const xingOffset = offset + 36;
-            if (
-              buffer[xingOffset] === ByteMap.X &&
-              buffer[xingOffset + 1] === ByteMap.i &&
-              buffer[xingOffset + 2] === ByteMap.n &&
-              buffer[xingOffset + 3] === ByteMap.g
-            ) {
-              isMetadataFrame = true;
-            }
-          }
-
-          // INFO header check (offset + 36)
-          if (!isMetadataFrame && offset + 40 <= buffer.length) {
-            const infoOffset = offset + 36;
-            if (
-              buffer[infoOffset] === ByteMap.I &&
-              buffer[infoOffset + 1] === ByteMap.n &&
-              buffer[infoOffset + 2] === ByteMap.f &&
-              buffer[infoOffset + 3] === ByteMap.o // 'Info'
-            ) {
-              isMetadataFrame = true;
-            }
-          }
-
-          // VBRI header check (offset + 32)
-          if (!isMetadataFrame && offset + 36 <= buffer.length) {
-            const vbriOffset = offset + 32;
-            if (
-              buffer[vbriOffset] === ByteMap.V &&
-              buffer[vbriOffset + 1] === ByteMap.B &&
-              buffer[vbriOffset + 2] === ByteMap.R &&
-              buffer[vbriOffset + 3] === ByteMap.I // 'VBRI'
-            ) {
-              isMetadataFrame = true;
-            }
-          }
-
-          if (!isMetadataFrame) {
-            frameCount++;
-          }
-          offset += frameSize;
-        } else {
-          // Not enough data for complete frame, keep in buffer
-          break;
-        }
-      } else {
+      if (!isFrameSync(offset)) {
         offset++;
+        continue;
+      }
+
+      // Extract header information
+      const bitrateIndex = getBitrateIndex(offset);
+      const sampleRateIndex = getSampleRateIndex(offset);
+      const padding = getPadding(offset);
+
+      const bitrate = getBitrate(bitrateIndex);
+      const sampleRate = getSampleRate(sampleRateIndex);
+
+      // Skip invalid frames
+      if (
+        bitrate === undefined ||
+        sampleRate === undefined ||
+        bitrate === 0 ||
+        sampleRate === 0
+      ) {
+        offset++;
+        continue;
+      }
+
+      // Calculate frame size: (144 * bitrate) / sampleRate + padding
+      const frameSize =
+        Math.floor((144 * bitrate * 1000) / sampleRate) + padding;
+
+      // Make sure we have the complete frame in buffer
+      if (offset + frameSize <= buffer.length) {
+        // Check for XING/INFO/VBRI metadata frames (VBR headers)
+        let isMetadataFrame = false;
+
+        // XING header check (offset + 36 for MPEG1 Layer3)
+        if (offset + 40 <= buffer.length) {
+          const xingOffset = offset + 36;
+          if (isXingHeader(xingOffset)) {
+            isMetadataFrame = true;
+          }
+        }
+
+        // INFO header check (offset + 36)
+        if (!isMetadataFrame && offset + 40 <= buffer.length) {
+          const infoOffset = offset + 36;
+          if (isInfoHeader(infoOffset)) {
+            isMetadataFrame = true;
+          }
+        }
+
+        // VBRI header check (offset + 32)
+        if (!isMetadataFrame && offset + 36 <= buffer.length) {
+          const vbriOffset = offset + 32;
+          if (isVbriHeader(vbriOffset)) {
+            isMetadataFrame = true;
+          }
+        }
+
+        if (!isMetadataFrame) {
+          frameCount++;
+        }
+        offset += frameSize;
+      } else {
+        // Not enough data for complete frame, keep in buffer
+        break;
       }
     }
 
